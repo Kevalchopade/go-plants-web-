@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GoPlants – Plant Detection System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --forest:   #0f2419;
+    --leaf:     #1a4228;
+    --moss:     #2d6a4f;
+    --sage:     #52b788;
+    --mint:     #95d5b2;
+    --cream:    #f8f4e8;
+    --parchment:#ede8d5;
+    --gold:     #c9a84c;
+    --gold-lt:  #e8c97a;
+    --rust:     #c44b2b;
+    --rust-lt:  #e8724f;
+    --text:     #1c2b22;
+    --text-lt:  #4a6355;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--forest);
+    color: var(--cream);
+    font-family: 'Outfit', sans-serif;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* ── Custom cursor ── */
+  .cursor {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--sage);
+    position: fixed; pointer-events: none;
+    z-index: 9999; transform: translate(-50%,-50%);
+    transition: transform .1s, background .2s;
+    mix-blend-mode: screen;
+  }
+  .cursor-ring {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--gold);
+    border-radius: 50%;
+    position: fixed; pointer-events: none;
+    z-index: 9998; transform: translate(-50%,-50%);
+    transition: transform .25s cubic-bezier(.17,.67,.43,1.2), opacity .2s;
+    opacity: .6;
+  }
+
+  /* ── Canvas bg ── */
+  #bg-canvas {
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 0;
+    opacity: .35;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.2rem 4rem;
+    background: linear-gradient(to bottom, rgba(15,36,25,.95), transparent);
+    backdrop-filter: blur(4px);
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: .7rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem; font-weight: 700;
+    color: var(--cream); text-decoration: none;
+    letter-spacing: .02em;
+  }
+  .nav-logo span { color: var(--gold); }
+  .nav-logo .leaf-icon { font-size: 1.6rem; }
+  .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+  .nav-links a {
+    color: var(--mint); text-decoration: none;
+    font-size: .85rem; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase;
+    transition: color .2s;
+    font-family: 'DM Mono', monospace;
+  }
+  .nav-links a:hover { color: var(--gold); }
+  .nav-cta {
+    background: var(--sage); color: var(--forest) !important;
+    padding: .45rem 1.2rem; border-radius: 2rem;
+    font-weight: 600 !important; transition: background .2s, transform .15s !important;
+  }
+  .nav-cta:hover { background: var(--mint) !important; transform: scale(1.04); }
+
+  /* ── SECTIONS BASE ── */
+  section { position: relative; z-index: 1; }
+
+  /* ── HERO ── */
+  #hero {
+    min-height: 100vh;
+    display: grid; place-items: center;
+    padding: 8rem 4rem 4rem;
+    overflow: hidden;
+  }
+  .hero-inner {
+    max-width: 960px; text-align: center;
+    animation: fadeUp .9s ease both;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: rgba(82,183,136,.12);
+    border: 1px solid rgba(82,183,136,.3);
+    padding: .35rem 1rem; border-radius: 2rem;
+    font-size: .75rem; font-family: 'DM Mono', monospace;
+    color: var(--sage); letter-spacing: .1em; text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+  .hero-badge::before { content:'●'; color: var(--sage); font-size: .5rem; }
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    line-height: 1.08; letter-spacing: -.01em;
+    margin-bottom: 1.4rem;
+  }
+  h1 em { font-style: italic; color: var(--gold); }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--mint);
+    max-width: 580px; margin: 0 auto 2.8rem;
+    line-height: 1.7; font-weight: 300;
+  }
+  .hero-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    padding: .8rem 2rem; border-radius: 3rem;
+    font-size: .9rem; font-weight: 600;
+    text-decoration: none; cursor: none;
+    transition: transform .2s, box-shadow .2s;
+    letter-spacing: .03em;
+  }
+  .btn:hover { transform: translateY(-3px); }
+  .btn-primary {
+    background: var(--sage); color: var(--forest);
+    box-shadow: 0 6px 28px rgba(82,183,136,.35);
+  }
+  .btn-primary:hover { box-shadow: 0 10px 36px rgba(82,183,136,.5); }
+  .btn-outline {
+    border: 1.5px solid var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 0 0 rgba(201,168,76,.2);
+  }
+  .btn-outline:hover { box-shadow: 0 0 28px rgba(201,168,76,.25); }
+
+  .hero-stats {
+    display: flex; gap: 3rem; justify-content: center;
+    margin-top: 4rem; flex-wrap: wrap;
+  }
+  .stat { text-align: center; }
+  .stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.2rem; color: var(--gold-lt);
+    display: block; font-weight: 700;
+  }
+  .stat-label {
+    font-size: .75rem; color: var(--text-lt);
+    letter-spacing: .1em; text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+  }
+
+  /* ── SCAN DEMO ── */
+  #demo {
+    padding: 6rem 4rem;
+    background: linear-gradient(180deg, var(--forest) 0%, var(--leaf) 50%, var(--forest) 100%);
+  }
+  .section-header { text-align: center; margin-bottom: 3.5rem; }
+  .section-tag {
+    font-family: 'DM Mono', monospace; font-size: .72rem;
+    color: var(--sage); letter-spacing: .15em; text-transform: uppercase;
+    margin-bottom: .8rem; display: block;
+  }
+  h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 4vw, 3rem);
+    color: var(--cream); line-height: 1.2;
+  }
+  h2 span { color: var(--gold); }
+
+  .demo-card {
+    max-width: 700px; margin: 0 auto;
+    background: rgba(26,66,40,.6);
+    border: 1px solid rgba(82,183,136,.2);
+    border-radius: 1.5rem;
+    padding: 2.5rem;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 24px 64px rgba(0,0,0,.4);
+  }
+  .upload-zone {
+    border: 2px dashed rgba(82,183,136,.35);
+    border-radius: 1rem; padding: 3.5rem 2rem;
+    text-align: center;
+    cursor: none;
+    position: relative; overflow: hidden;
+    transition: border-color .3s, background .3s;
+    background: rgba(15,36,25,.4);
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--sage);
+    background: rgba(82,183,136,.07);
+  }
+  .upload-zone::before {
+    content:'';
+    position: absolute; top: -100%; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--sage), transparent);
+    animation: scan 2.2s linear infinite;
+  }
+  @keyframes scan {
+    0%   { top: -3px; }
+    100% { top: 100%; }
+  }
+  .upload-icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+  .upload-title { font-size: 1rem; color: var(--cream); font-weight: 500; }
+  .upload-sub { font-size: .8rem; color: var(--text-lt); margin-top: .4rem; font-family: 'DM Mono', monospace; }
+
+  #file-input { display: none; }
+
+  .result-panel {
+    margin-top: 1.5rem; display: none;
+    background: rgba(15,36,25,.7);
+    border: 1px solid rgba(201,168,76,.25);
+    border-radius: 1rem; padding: 1.5rem;
+    animation: fadeUp .4s ease;
+  }
+  .result-panel.show { display: block; }
+  .result-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .result-label { font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--text-lt); letter-spacing: .1em; text-transform: uppercase; }
+  .result-val { font-weight: 600; color: var(--mint); }
+  .confidence-bar-wrap { margin-top: .5rem; }
+  .confidence-bar-bg { background: rgba(255,255,255,.08); border-radius: 1rem; height: 6px; }
+  .confidence-bar-fill {
+    height: 6px; border-radius: 1rem;
+    background: linear-gradient(90deg, var(--sage), var(--gold));
+    width: 0; transition: width 1.2s cubic-bezier(.25,.8,.25,1);
+  }
+  .disease-badge {
+    display: inline-block; padding: .3rem .9rem;
+    border-radius: 2rem; font-size: .78rem; font-weight: 600;
+    font-family: 'DM Mono', monospace;
+  }
+  .badge-healthy { background: rgba(82,183,136,.15); color: var(--sage); border: 1px solid rgba(82,183,136,.3); }
+  .badge-disease { background: rgba(196,75,43,.15); color: var(--rust-lt); border: 1px solid rgba(196,75,43,.3); }
+
+  /* ── HOW IT WORKS ── */
+  #how {
+    padding: 6rem 4rem;
+  }
+  .steps-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem; max-width: 960px; margin: 0 auto;
+    position: relative;
+  }
+  .steps-grid::before {
+    content:'';
+    position: absolute; top: 2.5rem; left: 15%; right: 15%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--moss), var(--gold), var(--moss), transparent);
+    opacity: .5;
+  }
+  .step-card {
+    background: rgba(26,66,40,.4);
+    border: 1px solid rgba(82,183,136,.15);
+    border-radius: 1.2rem; padding: 2rem 1.5rem;
+    text-align: center;
+    transition: transform .3s, border-color .3s, box-shadow .3s;
+    backdrop-filter: blur(6px);
+    animation: fadeUp .6s ease both;
+  }
+  .step-card:nth-child(1) { animation-delay: .1s; }
+  .step-card:nth-child(2) { animation-delay: .2s; }
+  .step-card:nth-child(3) { animation-delay: .3s; }
+  .step-card:nth-child(4) { animation-delay: .4s; }
+  .step-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--sage);
+    box-shadow: 0 12px 40px rgba(82,183,136,.15);
+  }
+  .step-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem; color: rgba(201,168,76,.2);
+    font-weight: 700; line-height: 1;
+    margin-bottom: .5rem;
+  }
+  .step-icon { font-size: 2rem; margin-bottom: .8rem; display: block; }
+  .step-title { font-weight: 600; color: var(--cream); margin-bottom: .5rem; }
+  .step-desc { font-size: .83rem; color: var(--text-lt); line-height: 1.6; }
+
+  /* ── FEATURES ── */
+  #features {
+    padding: 6rem 4rem;
+    background: linear-gradient(180deg, var(--forest) 0%, rgba(26,66,40,.4) 100%);
+  }
+  .features-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem; max-width: 1000px; margin: 0 auto;
+  }
+  .feat-card {
+    background: rgba(15,36,25,.7);
+    border: 1px solid rgba(82,183,136,.12);
+    border-radius: 1.2rem; padding: 2rem;
+    transition: transform .3s, box-shadow .3s;
+    position: relative; overflow: hidden;
+  }
+  .feat-card::after {
+    content:'';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--moss), var(--gold));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .4s;
+  }
+  .feat-card:hover { transform: translateY(-4px); box-shadow: 0 16px 44px rgba(0,0,0,.3); }
+  .feat-card:hover::after { transform: scaleX(1); }
+  .feat-icon {
+    width: 48px; height: 48px; border-radius: .8rem;
+    background: rgba(82,183,136,.12);
+    display: grid; place-items: center;
+    font-size: 1.4rem; margin-bottom: 1.2rem;
+  }
+  .feat-title { font-weight: 600; color: var(--cream); margin-bottom: .5rem; }
+  .feat-desc { font-size: .85rem; color: var(--text-lt); line-height: 1.65; }
+  .feat-tag {
+    margin-top: 1rem;
+    font-family: 'DM Mono', monospace; font-size: .7rem;
+    color: var(--sage); letter-spacing: .08em;
+  }
+
+  /* ── TECH STACK ── */
+  #tech {
+    padding: 5rem 4rem;
+    text-align: center;
+  }
+  .tech-pills {
+    display: flex; flex-wrap: wrap; gap: .8rem;
+    justify-content: center; margin-top: 2.5rem; max-width: 700px; margin-left: auto; margin-right: auto;
+  }
+  .pill {
+    padding: .5rem 1.2rem;
+    border-radius: 2rem; font-family: 'DM Mono', monospace;
+    font-size: .78rem; letter-spacing: .06em;
+    transition: transform .2s;
+  }
+  .pill:hover { transform: scale(1.06); }
+  .pill-green  { background: rgba(82,183,136,.12); border: 1px solid rgba(82,183,136,.3); color: var(--mint); }
+  .pill-gold   { background: rgba(201,168,76,.1); border: 1px solid rgba(201,168,76,.3); color: var(--gold-lt); }
+  .pill-red    { background: rgba(196,75,43,.1); border: 1px solid rgba(196,75,43,.3); color: var(--rust-lt); }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 3rem 4rem;
+    border-top: 1px solid rgba(82,183,136,.12);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem;
+  }
+  .footer-logo { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--cream); }
+  .footer-logo span { color: var(--gold); }
+  .footer-copy { font-size: .78rem; color: var(--text-lt); font-family: 'DM Mono', monospace; }
+  .footer-links { display: flex; gap: 1.5rem; }
+  .footer-links a { color: var(--text-lt); text-decoration: none; font-size: .8rem; transition: color .2s; }
+  .footer-links a:hover { color: var(--sage); }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0; transform: translateY(30px);
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    nav { padding: 1rem 1.5rem; }
+    .nav-links { display: none; }
+    #hero, #demo, #how, #features, #tech { padding: 4rem 1.5rem; }
+    footer { padding: 2rem 1.5rem; flex-direction: column; text-align: center; }
+    .steps-grid::before { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursor-ring"></div>
+<canvas id="bg-canvas"></canvas>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">
+    <span class="leaf-icon">🌿</span>
+    Go<span>Plants</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#demo">Demo</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#tech">Stack</a></li>
+    <li><a href="https://github.com/Kevalchopade/Plant-detection-system" class="nav-cta" target="_blank">GitHub</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">MobileNetV2 · CNN · TensorFlow</div>
+    <h1>Detect Plants &amp;<br/><em>Diagnose Disease</em><br/>Instantly</h1>
+    <p class="hero-sub">
+      GoPlants uses two MobileNetV2 models to identify plant species and detect leaf diseases from a single image — with confidence thresholding for reliable results.
+    </p>
+    <div class="hero-btns">
+      <a href="#demo" class="btn btn-primary">Try Demo ↓</a>
+      <a href="https://github.com/Kevalchopade/Plant-detection-system" class="btn btn-outline" target="_blank">View on GitHub</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><span class="stat-num">2</span><span class="stat-label">CNN Models</span></div>
+      <div class="stat"><span class="stat-num">MNv2</span><span class="stat-label">Architecture</span></div>
+      <div class="stat"><span class="stat-num">38+</span><span class="stat-label">Disease Classes</span></div>
+      <div class="stat"><span class="stat-num">≥60%</span><span class="stat-label">Confidence Threshold</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+  <div class="section-header reveal">
+    <span class="section-tag">// Live Demo</span>
+    <h2>Upload a Leaf Image</h2>
+  </div>
+
+  <div class="demo-card reveal">
+    <div class="upload-zone" id="upload-zone">
+      <span class="upload-icon">🍃</span>
+      <div class="upload-title">Drop your plant image here</div>
+      <div class="upload-sub">PNG, JPG, JPEG · Max 10MB</div>
+      <input type="file" id="file-input" accept="image/*"/>
+    </div>
+    <div style="text-align:center; margin-top:1.2rem;">
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()" style="cursor:none;">
+        Choose Image
+      </button>
+    </div>
+
+    <div class="result-panel" id="result-panel">
+      <div id="result-img-wrap" style="margin-bottom:1.2rem; border-radius:.8rem; overflow:hidden; max-height:200px; display:flex; justify-content:center; background:rgba(0,0,0,.3);">
+        <img id="result-img" style="max-height:200px; object-fit:contain;"/>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Plant Detected</span>
+        <span class="result-val" id="plant-name">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Disease Status</span>
+        <span id="disease-status">—</span>
+      </div>
+      <div class="confidence-bar-wrap">
+        <div class="result-row" style="margin-bottom:.4rem;">
+          <span class="result-label">Confidence</span>
+          <span class="result-val" id="confidence-val">—</span>
+        </div>
+        <div class="confidence-bar-bg">
+          <div class="confidence-bar-fill" id="conf-bar"></div>
+        </div>
+      </div>
+      <p style="margin-top:1.2rem; font-size:.75rem; color:var(--text-lt); font-family:'DM Mono',monospace; text-align:center;">
+        ⚠ Demo uses simulated results. Connect backend for live inference.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-header reveal">
+    <span class="section-tag">// Pipeline</span>
+    <h2>How <span>It Works</span></h2>
+  </div>
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-num">01</div>
+      <span class="step-icon">📸</span>
+      <div class="step-title">Image Input</div>
+      <div class="step-desc">User uploads a plant leaf image via the Tkinter UI or web interface.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">02</div>
+      <span class="step-icon">🔬</span>
+      <div class="step-title">Preprocessing</div>
+      <div class="step-desc">Image resized to 224×224, normalised and fed into the pipeline.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">03</div>
+      <span class="step-icon">🧠</span>
+      <div class="step-title">Dual CNN Inference</div>
+      <div class="step-desc">Model 1 identifies the plant species. Model 2 detects disease class with confidence score.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">04</div>
+      <span class="step-icon">📊</span>
+      <div class="step-title">Result Display</div>
+      <div class="step-desc">Results shown only if confidence ≥ 60% — otherwise "uncertain" is returned.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="section-header reveal">
+    <span class="section-tag">// Capabilities</span>
+    <h2>Key <span>Features</span></h2>
+  </div>
+  <div class="features-grid">
+    <div class="feat-card reveal">
+      <div class="feat-icon">🌱</div>
+      <div class="feat-title">Plant Species Identification</div>
+      <div class="feat-desc">MobileNetV2 Model 1 classifies the uploaded leaf into known plant species with high accuracy.</div>
+      <div class="feat-tag">→ MobileNetV2 · Transfer Learning</div>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🦠</div>
+      <div class="feat-title">Disease Detection</div>
+      <div class="feat-desc">Model 2 specialises in identifying 38+ disease classes across tomato, potato, corn and more.</div>
+      <div class="feat-tag">→ PlantVillage Dataset</div>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🎯</div>
+      <div class="feat-title">Confidence Thresholding</div>
+      <div class="feat-desc">Predictions below 60% confidence are flagged as uncertain — preventing misleading outputs.</div>
+      <div class="feat-tag">→ Reliable Inference</div>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">🖥️</div>
+      <div class="feat-title">Desktop App (Tkinter)</div>
+      <div class="feat-desc">Fully functional standalone desktop application built in Python Tkinter — no browser needed.</div>
+      <div class="feat-tag">→ Python · Tkinter · PIL</div>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">⚡</div>
+      <div class="feat-title">Fast Inference</div>
+      <div class="feat-desc">MobileNetV2's lightweight depthwise separable convolutions enable rapid predictions on CPU.</div>
+      <div class="feat-tag">→ MobileNetV2 · Keras</div>
+    </div>
+    <div class="feat-card reveal">
+      <div class="feat-icon">📦</div>
+      <div class="feat-title">Modular Codebase</div>
+      <div class="feat-desc">Clean separation of model loading, preprocessing, UI and inference logic for easy extension.</div>
+      <div class="feat-tag">→ GitHub · Open Source</div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="tech">
+  <div class="section-header reveal">
+    <span class="section-tag">// Built With</span>
+    <h2>Tech <span>Stack</span></h2>
+  </div>
+  <div class="tech-pills reveal">
+    <span class="pill pill-green">Python 3</span>
+    <span class="pill pill-red">TensorFlow / Keras</span>
+    <span class="pill pill-green">MobileNetV2</span>
+    <span class="pill pill-gold">Tkinter</span>
+    <span class="pill pill-green">PIL / Pillow</span>
+    <span class="pill pill-red">NumPy</span>
+    <span class="pill pill-gold">PlantVillage Dataset</span>
+    <span class="pill pill-green">Transfer Learning</span>
+    <span class="pill pill-red">CNN</span>
+    <span class="pill pill-gold">Confidence Thresholding</span>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Go<span>Plants</span></div>
+  <div class="footer-copy">© 2024 Keval Chopade · Final Year Project</div>
+  <div class="footer-links">
+    <a href="https://github.com/Kevalchopade/Plant-detection-system" target="_blank">GitHub</a>
+    <a href="#hero">Back to top ↑</a>
+  </div>
+</footer>
+
+<script>
+/* ── Cursor ── */
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+document.addEventListener('mousemove', e => {
+  cur.style.left = e.clientX + 'px';
+  cur.style.top  = e.clientY + 'px';
+  setTimeout(() => {
+    ring.style.left = e.clientX + 'px';
+    ring.style.top  = e.clientY + 'px';
+  }, 80);
+});
+
+/* ── Canvas leaf particles ── */
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+const resize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+resize(); window.addEventListener('resize', resize);
+
+const particles = Array.from({length: 55}, () => ({
+  x: Math.random() * window.innerWidth,
+  y: Math.random() * window.innerHeight,
+  r: 1 + Math.random() * 2.5,
+  vx: (Math.random() - .5) * .3,
+  vy: -.2 - Math.random() * .4,
+  alpha: .2 + Math.random() * .5,
+  hue: 130 + Math.random() * 40
+}));
+
+function drawParticles() {
+  ctx.clearRect(0, 0, W, H);
+  particles.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue},60%,55%,${p.alpha})`;
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    if (p.y < -10) { p.y = H + 10; p.x = Math.random() * W; }
+    if (p.x < -10) p.x = W + 10;
+    if (p.x > W + 10) p.x = -10;
+  });
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+/* ── Scroll reveal ── */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: .1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ── File upload demo ── */
+const zone = document.getElementById('upload-zone');
+const inp  = document.getElementById('file-input');
+
+zone.addEventListener('click', () => inp.click());
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+});
+inp.addEventListener('change', () => { if (inp.files[0]) processFile(inp.files[0]); });
+
+const plants = ['Tomato', 'Potato', 'Corn', 'Apple', 'Grape', 'Pepper'];
+const diseases = [
+  ['Healthy', true],
+  ['Early Blight', false],
+  ['Late Blight', false],
+  ['Leaf Mold', false],
+  ['Powdery Mildew', false],
+];
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('result-img').src = e.target.result;
+    const panel = document.getElementById('result-panel');
+    panel.classList.add('show');
+
+    // Simulate results
+    const plant   = plants[Math.floor(Math.random() * plants.length)];
+    const disease = diseases[Math.floor(Math.random() * diseases.length)];
+    const conf    = 62 + Math.floor(Math.random() * 34);
+
+    document.getElementById('plant-name').textContent = plant;
+
+    const badge = document.getElementById('disease-status');
+    badge.innerHTML = disease[1]
+      ? `<span class="disease-badge badge-healthy">✓ ${disease[0]}</span>`
+      : `<span class="disease-badge badge-disease">⚠ ${disease[0]}</span>`;
+
+    document.getElementById('confidence-val').textContent = conf + '%';
+    setTimeout(() => {
+      document.getElementById('conf-bar').style.width = conf + '%';
+    }, 100);
+  };
+  reader.readAsDataURL(file);
+}
+</script>
+</body>
+</html>
